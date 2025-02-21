@@ -4,11 +4,10 @@ import os
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
 from aiogram import Bot
-import uvicorn
 
 # ✅ Load environment variables
 load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is missing. Please check your Railway environment variables.")
@@ -25,24 +24,24 @@ bot = Bot(token=BOT_TOKEN)
 # ✅ Subscription file
 SUBSCRIPTION_FILE = "subscribed_users.json"
 
-# ✅ Load subscribed users safely
+# ✅ Load subscribed users
 def load_subscriptions():
+    """Loads subscribers from file"""
     if os.path.exists(SUBSCRIPTION_FILE):
         try:
             with open(SUBSCRIPTION_FILE, "r") as file:
-                data = json.load(file)
-                return set(map(int, data))  # Convert user IDs to integers
-        except (json.JSONDecodeError, ValueError):
+                return set(json.load(file))
+        except json.JSONDecodeError:
             logging.error("⚠️ Error decoding JSON. Resetting subscriptions.")
             return set()
     return set()
 
-# ✅ Save subscribed users safely
+# ✅ Save subscribed users
 def save_subscriptions(users):
+    """Saves subscribers to file"""
     with open(SUBSCRIPTION_FILE, "w") as file:
         json.dump(list(users), file)
 
-# ✅ Load existing subscriptions
 subscribed_users = load_subscriptions()
 
 # ✅ TradingView Webhook Endpoint
@@ -76,12 +75,11 @@ async def tradingview_alert(request: Request):
 async def subscribe_user(request: Request):
     try:
         data = await request.json()
-        user_id = data.get("user_id")
+        user_id = str(data.get("user_id"))  # Ensure user_id is a string
 
         if not user_id:
             return {"status": "error", "message": "Missing user_id"}
 
-        user_id = int(user_id)  # Ensure user_id is stored as an integer
         subscribed_users.add(user_id)
         save_subscriptions(subscribed_users)
 
@@ -96,12 +94,10 @@ async def subscribe_user(request: Request):
 async def unsubscribe_user(request: Request):
     try:
         data = await request.json()
-        user_id = data.get("user_id")
+        user_id = str(data.get("user_id"))  # Ensure user_id is a string
 
         if not user_id:
             return {"status": "error", "message": "Missing user_id"}
-
-        user_id = int(user_id)  # Convert user_id to integer
 
         if user_id in subscribed_users:
             subscribed_users.remove(user_id)
@@ -114,9 +110,7 @@ async def unsubscribe_user(request: Request):
         logging.error(f"❌ Error unsubscribing user: {e}")
         return {"status": "error", "message": str(e)}
 
-# ✅ Run FastAPI Server Correctly in Railway
-def start_server():
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
-
+# ✅ Run FastAPI Server
 if __name__ == "__main__":
-    start_server()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
