@@ -7,10 +7,10 @@ from aiogram import Bot
 
 # ✅ Load environment variables
 load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN is missing. Please check your .env file.")
+    raise ValueError("BOT_TOKEN is missing. Please check your Railway environment variables.")
 
 # ✅ Initialize FastAPI
 app = FastAPI()
@@ -27,8 +27,12 @@ SUBSCRIPTION_FILE = "subscribed_users.json"
 # ✅ Load subscribed users
 def load_subscriptions():
     if os.path.exists(SUBSCRIPTION_FILE):
-        with open(SUBSCRIPTION_FILE, "r") as file:
-            return set(json.load(file))
+        try:
+            with open(SUBSCRIPTION_FILE, "r") as file:
+                return set(json.load(file))
+        except json.JSONDecodeError:
+            logging.error("⚠️ Error decoding JSON. Resetting subscriptions.")
+            return set()
     return set()
 
 # ✅ Save subscribed users
@@ -69,7 +73,7 @@ async def tradingview_alert(request: Request):
 async def subscribe_user(request: Request):
     try:
         data = await request.json()
-        user_id = data.get("user_id")
+        user_id = str(data.get("user_id"))  # Ensure user_id is a string
 
         if not user_id:
             return {"status": "error", "message": "Missing user_id"}
@@ -88,7 +92,7 @@ async def subscribe_user(request: Request):
 async def unsubscribe_user(request: Request):
     try:
         data = await request.json()
-        user_id = data.get("user_id")
+        user_id = str(data.get("user_id"))  # Ensure user_id is a string
 
         if not user_id:
             return {"status": "error", "message": "Missing user_id"}
