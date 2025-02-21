@@ -1,13 +1,14 @@
 import logging
 import json
 import os
+import asyncio
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
 from aiogram import Bot
 
 # ✅ Load environment variables
 load_dotenv()
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is missing. Please check your Railway environment variables.")
@@ -31,17 +32,21 @@ def load_subscriptions():
         try:
             with open(SUBSCRIPTION_FILE, "r") as file:
                 return set(json.load(file))
-        except json.JSONDecodeError:
-            logging.error("⚠️ Error decoding JSON. Resetting subscriptions.")
+        except (json.JSONDecodeError, FileNotFoundError):
+            logging.error("⚠️ Error loading subscriptions. Resetting file.")
             return set()
     return set()
 
 # ✅ Save subscribed users
-def save_subscriptions(users):
+def save_subscriptions():
     """Saves subscribers to file"""
-    with open(SUBSCRIPTION_FILE, "w") as file:
-        json.dump(list(users), file)
+    try:
+        with open(SUBSCRIPTION_FILE, "w") as file:
+            json.dump(list(subscribed_users), file)
+    except Exception as e:
+        logging.error(f"❌ Error saving subscriptions: {e}")
 
+# ✅ Initialize subscriptions
 subscribed_users = load_subscriptions()
 
 # ✅ TradingView Webhook Endpoint
@@ -57,12 +62,16 @@ async def tradingview_alert(request: Request):
             return {"status": "no_subscribers"}
 
         # ✅ Send message to subscribed users
-        for user in subscribed_users:
+        async def send_signal(user):
             try:
                 await bot.send_message(chat_id=user, text=message)
                 logging.info(f"✅ Sent signal to {user}")
             except Exception as e:
                 logging.error(f"❌ Failed to send message to {user}: {e}")
+
+        # ✅ Run all message sending tasks asynchronously
+        tasks = [send_signal(user) for user in subscribed_users]
+        await asyncio.gather(*tasks)
 
         return {"status": "success", "message": "Signal sent to subscribers"}
 
@@ -80,8 +89,11 @@ async def subscribe_user(request: Request):
         if not user_id:
             return {"status": "error", "message": "Missing user_id"}
 
+        if user_id in subscribed_users:
+            return {"status": "error", "message": "User already subscribed"}
+
         subscribed_users.add(user_id)
-        save_subscriptions(subscribed_users)
+        save_subscriptions()
 
         return {"status": "success", "message": f"User {user_id} subscribed"}
 
@@ -101,7 +113,7 @@ async def unsubscribe_user(request: Request):
 
         if user_id in subscribed_users:
             subscribed_users.remove(user_id)
-            save_subscriptions(subscribed_users)
+            save_subscriptions()
             return {"status": "success", "message": f"User {user_id} unsubscribed"}
         else:
             return {"status": "error", "message": "User not found in subscription list"}
