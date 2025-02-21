@@ -53,15 +53,23 @@ subscribed_users = load_subscriptions()
 @app.post("/tradingview")
 async def tradingview_alert(request: Request):
     try:
+        # ✅ Attempt to read the request JSON
         data = await request.json()
-        message = data.get("message", "📩 VPASS PRO GOT SIGNAL!")
+        
+        # ✅ Validate JSON structure
+        if not data or "message" not in data:
+            logging.error(f"❌ Invalid request: {data}")
+            return {"status": "error", "message": "Invalid JSON format or missing 'message' field"}
+
+        message = data["message"]
+        logging.info(f"📩 Received TradingView Alert: {message}")
 
         # ✅ Check if there are subscribed users
         if not subscribed_users:
             logging.info("⚠️ No subscribed users to send the signal.")
             return {"status": "no_subscribers"}
 
-        # ✅ Send message to subscribed users
+        # ✅ Send message to subscribed users asynchronously
         async def send_signal(user):
             try:
                 await bot.send_message(chat_id=user, text=message)
@@ -69,11 +77,14 @@ async def tradingview_alert(request: Request):
             except Exception as e:
                 logging.error(f"❌ Failed to send message to {user}: {e}")
 
-        # ✅ Run all message sending tasks asynchronously
         tasks = [send_signal(user) for user in subscribed_users]
         await asyncio.gather(*tasks)
 
         return {"status": "success", "message": "Signal sent to subscribers"}
+
+    except json.JSONDecodeError:
+        logging.error("❌ Received an invalid JSON request from TradingView.")
+        return {"status": "error", "message": "Invalid JSON format"}
 
     except Exception as e:
         logging.error(f"❌ Error in TradingView webhook: {e}")
