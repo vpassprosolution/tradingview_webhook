@@ -5,6 +5,7 @@ import asyncio
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
 from aiogram import Bot
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ✅ Load environment variables
 load_dotenv()
@@ -71,11 +72,21 @@ async def tradingview_alert(request: Request):
 
         # ✅ Send message to subscribed users asynchronously
         async def send_signal(user):
-            try:
-                await bot.send_message(chat_id=user, text=message)
-                logging.info(f"✅ Sent signal to {user}")
-            except Exception as e:
-                logging.error(f"❌ Failed to send message to {user}: {e}")
+    try:
+        # ✅ Add "🚫 Unsubscribe" & "🔄 Start Again" Buttons
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🚫 Unsubscribe", callback_data=f"unsubscribe_signal_{user}")],
+                [InlineKeyboardButton(text="🔄 Start Again", callback_data="show_main_buttons")]
+            ]
+        )
+
+        # ✅ Send AI Signal Alert with Buttons
+        await bot.send_message(chat_id=user, text=message, reply_markup=keyboard)
+        logging.info(f"✅ Sent signal to {user}")
+
+    except Exception as e:
+        logging.error(f"❌ Failed to send message to {user}: {e}")
 
         tasks = [send_signal(user) for user in subscribed_users]
         await asyncio.gather(*tasks)
