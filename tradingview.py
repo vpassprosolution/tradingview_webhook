@@ -50,28 +50,8 @@ def save_subscriptions():
 # ✅ Initialize subscriptions
 subscribed_users = load_subscriptions()
 
-# ✅ TradingView Webhook Endpoint
-@app.post("/tradingview")
-async def tradingview_alert(request: Request):
-    try:
-        # ✅ Attempt to read the request JSON
-        data = await request.json()
-        
-        # ✅ Validate JSON structure
-        if not data or "message" not in data:
-            logging.error(f"❌ Invalid request: {data}")
-            return {"status": "error", "message": "Invalid JSON format or missing 'message' field"}
-
-        message = data["message"]
-        logging.info(f"📩 Received TradingView Alert: {message}")
-
-        # ✅ Check if there are subscribed users
-        if not subscribed_users:
-            logging.info("⚠️ No subscribed users to send the signal.")
-            return {"status": "no_subscribers"}
-
-        # ✅ Send message to subscribed users asynchronously
-        async def send_signal(user):
+# ✅ Function to send AI signal with buttons
+async def send_signal(user, message):
     try:
         # ✅ Add "🚫 Unsubscribe" & "🔄 Start Again" Buttons
         keyboard = InlineKeyboardMarkup(
@@ -88,7 +68,28 @@ async def tradingview_alert(request: Request):
     except Exception as e:
         logging.error(f"❌ Failed to send message to {user}: {e}")
 
-        tasks = [send_signal(user) for user in subscribed_users]
+# ✅ TradingView Webhook Endpoint
+@app.post("/tradingview")
+async def tradingview_alert(request: Request):
+    try:
+        # ✅ Read the request JSON
+        data = await request.json()
+        
+        # ✅ Validate JSON structure
+        if not data or "message" not in data:
+            logging.error(f"❌ Invalid request: {data}")
+            return {"status": "error", "message": "Invalid JSON format or missing 'message' field"}
+
+        message = data["message"]
+        logging.info(f"📩 Received TradingView Alert: {message}")
+
+        # ✅ Check if there are subscribed users
+        if not subscribed_users:
+            logging.info("⚠️ No subscribed users to send the signal.")
+            return {"status": "no_subscribers"}
+
+        # ✅ Send message to subscribed users asynchronously
+        tasks = [send_signal(user, message) for user in subscribed_users]
         await asyncio.gather(*tasks)
 
         return {"status": "success", "message": "Signal sent to subscribers"}
